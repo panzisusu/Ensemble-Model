@@ -53,3 +53,14 @@
   2. 將檔案 `README.md`、`Ensemble_v1.2_Draft(1).md`、`Light and classic.md`、`Ens-his.md` 與 `Ensemble-chatGPT.pdf` 全部推送至新獨立儲存庫 [Ensemble-Model](https://github.com/gogogo137-cmyk/Ensemble-Model)。
   3. 清理主作品集網頁專案目錄 `gogogo137-cmyk.github.io` 中的重複資料夾。
   4. 將個人網頁中的方塊連結修正為指向獨立的 GitHub 專案 `https://github.com/gogogo137-cmyk/Ensemble-Model`，並推送更新至 GitHub Pages 上。
+
+### 7. 擴充實作四種進階整合學習演算法
+* **使用者：** 剛剛的IO裡面阿 我看演算法只有兩種? 我看好像有很多種?
+* **AI 助理：** 說明並提出計畫，將隨機森林 (Random Forest)、GBDT 梯度提升、Voting、以及 Stacking 等課堂重要整合方法一併實作。
+* **使用者：** 好 就弄。
+* **執行動作：**
+  1. 修改 `index.html`，在下拉選單中新增「隨機森林 (Random Forest)」、「梯度提升 (GBDT)」、「加權投票 (Voting)」、「堆疊泛化 (Stacking)」等選項，並充實理論講堂內容。
+  2. 在 `app.js` 中實作特徵隨機抽樣演算法（隨機森林），並撰寫回歸樹（GBDT）擬合殘差的流程。
+  3. 為 Voting/Stacking 設計並訓練了三種不同數學特性的基底分類器：決策單元 (Stump)、線性感知機 (Perceptron)、圓形分類器 (Circle Classifier)，並在畫布上可視化繪製其虛線邊界，最終透過硬投票或 Meta-Stump 進行結合預測。
+  4. 同步更新 `README.md` 的待辦事項，並將程式碼和紀錄推送到遠端倉庫。
+

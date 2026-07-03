@@ -66,8 +66,12 @@
                     <div class="form-group">
                         <label for="ensemble-method">集成演算法 (Method)</label>
                         <select id="ensemble-method" onchange="onMethodChange()">
-                            <option value="bagging">自助聚合 (Bagging - Random Forest style)</option>
-                            <option value="boosting">自適應提升 (AdaBoost - Sequential)</option>
+                            <option value="bagging">自助聚合 (Bagging)</option>
+                            <option value="randomforest">隨機森林 (Random Forest)</option>
+                            <option value="boosting">自適應提升 (AdaBoost)</option>
+                            <option value="gbdt">梯度提升 (GBDT - Residuals)</option>
+                            <option value="voting">加權投票 (Voting - 3 Models)</option>
+                            <option value="stacking">堆疊泛化 (Stacking - 3 Models)</option>
                         </select>
                     </div>
 
@@ -162,44 +166,53 @@
                 
                 <div class="math-intro-grid">
                     <div class="theory-card">
-                        <h3><i class="fa-solid fa-cube text-gold"></i> 1. 自助聚合法 (Bagging)</h3>
+                        <h3><i class="fa-solid fa-cube text-gold"></i> 1. 自助聚合法 (Bagging) & 隨機森林 (Random Forest)</h3>
                         <p>Bagging 藉由<strong>降低模型的變異 (Variance)</strong> 來提升效能，隨機森林 (Random Forest) 就是最經典的 Bagging 實作。</p>
                         <div class="theory-box">
                             <strong>運作核心：</strong>
                             <ul>
-                                <li><strong>Bootstrap：</strong> 從原始訓練集中進行「有放回抽樣」產生 $T$ 個子資料集。</li>
-                                <li><strong>Parallel Training：</strong> 獨立且平行地在每個子資料集上訓練一個基底模型。</li>
-                                <li><strong>Aggregating：</strong> 將所有模型預測結果進行投票或求取平均。</li>
+                                <li><strong>Bootstrap Sampling：</strong> 從原始訓練集中進行「有放回抽樣」產生 $T$ 個獨立子集。</li>
+                                <li><strong>Feature Bagging (RF 核心)：</strong> 在分割每個樹節點時，隨機選取部分特徵進行分裂評估，而非檢索所有特徵。這增加了個別樹之間的多樣性。</li>
+                                <li><strong>Aggregation：</strong> 將所有樹的預測結果以多數決 (Voting) 聚合。</li>
                             </ul>
                         </div>
-                        <p class="theory-note">在本沙盤中，您會看到多個虛線的弱分割，它們都是在不同隨機子樣本下產生的單一決策樹枝。當我們把這些多樣化的決策合併時，最終的邊界會變得更平滑，抗噪能力也大增。</p>
+                        <p class="theory-note">在本沙盤的隨機森林模式下，當分裂節點時，系統會隨機抽籤只決定使用 X 軸或 Y 軸特徵進行分割（傳統 Bagging 會同時評估 X 和 Y 取最佳者）。這使得個別決策邊界更具隨機性，但集成後的邊界反而更平滑且穩定。</p>
                     </div>
 
                     <div class="theory-card">
-                        <h3><i class="fa-solid fa-arrows-spin text-gold"></i> 2. 自適應提升法 (AdaBoost)</h3>
-                        <p>Boosting 是一系列將<strong>弱學習器 (Weak Learners)</strong> 提升為強學習器的序列式方法，著重於<strong>降低偏差 (Bias)</strong>。</p>
+                        <h3><i class="fa-solid fa-arrows-spin text-gold"></i> 2. 自適應提升 (AdaBoost) & 梯度提升 (GBDT)</h3>
+                        <p>Boosting 著重於將弱學習器提升為強學習器，核心在於<strong>降低偏差 (Bias)</strong>。</p>
                         <div class="theory-box">
-                            <strong>自適應樣本權重更新公式：</strong>
-                            <p>對每個樣本 $i$，其權重 $w_i$ 更新為：</p>
+                            <strong>演算法比較：</strong>
+                            <ul>
+                                <li><strong>AdaBoost：</strong> 根據前一輪的**分類錯誤率**更新樣本權重。錯題點的權重變高（圖形放大），使後續模型聚焦處理。</li>
+                                <li><strong>GBDT (Gradient Boosting)：</strong> 每一步都在擬合前一步模型的**機率殘差 (Residuals / Gradients)**，即真實值與預測機率之差。</li>
+                            </ul>
+                            <strong>GBDT 殘差計算公式：</strong>
                             <div class="math-formula">
-                                $$w_i \leftarrow w_i \cdot e^{-\alpha_t y_i h_t(x_i)}$$
-                            </div>
-                            <p>其中 $y_i$ 為真實類別（$\pm 1$），$h_t(x_i)$ 為第 $t$ 個弱分類器的預測值，$\alpha_t$ 是該分類器的投票權重：</p>
-                            <div class="math-formula">
-                                $$\alpha_t = \frac{1}{2} \ln \left( \frac{1 - \epsilon_t}{\epsilon_t} \right)$$
+                                $$r_i = y_i - \sigma(F_{t-1}(x_i))$$
                             </div>
                         </div>
-                        <p class="theory-note">在本沙盤的 AdaBoost 模式下，每次單步更新時，上一輪**預測錯誤**的點會在畫布上**變大（權重上升）**，迫使下一個基底模型專門針對這些「難題」進行分割。最後的決策是由所有學習器乘上其投票權重 $\alpha_t$ 疊加而成。</p>
+                        <p class="theory-note">在 GBDT 模式下，弱學習器轉變為回歸樹，用以擬合點的殘差。隨著迭代次數增加，您會發現分類越模糊的邊界處其擬合精度會被逐步微調，決策邊界呈現出漸進的層次感。</p>
                     </div>
 
                     <div class="theory-card">
-                        <h3><i class="fa-solid fa-code-fork text-gold"></i> 3. 投票與堆疊 (Voting & Stacking)</h3>
+                        <h3><i class="fa-solid fa-code-fork text-gold"></i> 3. 多模型投票 (Voting) & 堆疊泛化 (Stacking)</h3>
+                        <p>當不限定於使用同一種類型（如同為決策樹）的弱學習器時，我們可以使用多模型整合：</p>
                         <div class="theory-box">
-                            <strong>Voting (投票法)：</strong>
-                            <p>結合了**不同種類**的模型（例如支持向量機、邏輯回歸、決策樹），直接取多數決（硬投票）或預測機率之加權平均（軟投票）。</p>
+                            <strong>基底模型設計 (Base Models)：</strong>
+                            <p>本沙盒中配置了三種不同數學性質的分類器：</p>
+                            <ol>
+                                <li><strong>決策單元 (Stump)</strong>：軸向單線分割。</li>
+                                <li><strong>線性劃分 (Linear)</strong>：任意斜率對角分割。</li>
+                                <li><strong>圓形劃分 (Circle)</strong>：空間範圍內外分割。</li>
+                            </ol>
                             <hr style="border: 0; border-top: 1px solid var(--gold-border); margin: 10px 0;">
-                            <strong>Stacking (堆疊法)：</strong>
-                            <p>不使用簡單的加權投票，而是把數個基底模型（Level-0）的預測結果，作為特徵輸入給一個新的元學習器（Level-1 Meta-Classifier / Blender），由它學習如何最優地融合這些結果。</p>
+                            <strong>整合方式：</strong>
+                            <ul>
+                                <li><strong>Voting：</strong> 三個模型各自訓練後，對新樣本取多數決 (Majority Vote)。</li>
+                                <li><strong>Stacking：</strong> 將三個模型在原始數據上的預測值輸出（作為特徵），另外訓練一個 Meta-Stump 元分類器來動態融合他們的預測結果。</li>
+                            </ul>
                         </div>
                     </div>
                 </div>

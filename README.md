@@ -101,9 +101,10 @@
 
 ## 📝 待補充與後續實驗清單 (To-do List)
 
-- [ ] **Random Forest (隨機森林)：** 經典的 Bagging 應用，結合多個 Decision Tree 與隨機特徵選擇。
+- [x] **Random Forest (隨機森林)：** 經典的 Bagging 應用，在沙盤中已實現節點特徵隨機抽樣。
 - [ ] **OOB (Out-of-Bag)：** 自助抽樣時未被抽中（約佔 36.8%）的資料，可用於驗證模型效能。
-- [ ] **Voting & Stacking 實作：** 結合多種不同演算法（如 SVM, KNN, RF 等）的整合方法。
+- [x] **GBDT (梯度提升樹)：** 擬合機率殘差的回歸樹整合方法。
+- [x] **Voting & Stacking 實作：** 結合軸向 Stump、Perceptron 線性與圓形劃分三種不同性質基底模型的多模型投票與堆疊。
 - [ ] **AutoML 工具整合：**
   - **PyCaret**
   - **TPOT**

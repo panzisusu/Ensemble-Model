@@ -68,8 +68,8 @@ function setClass(label) {
 
 function onMethodChange() {
     const method = methodSelect.value;
-    groupSampleRate.style.display = method === 'bagging' ? 'block' : 'none';
-    groupLearningRate.style.display = method === 'boosting' ? 'block' : 'none';
+    groupSampleRate.style.display = (method === 'bagging' || method === 'randomforest') ? 'block' : 'none';
+    groupLearningRate.style.display = (method === 'boosting' || method === 'gbdt') ? 'block' : 'none';
     resetWeights();
     retrain();
 }
@@ -156,13 +156,19 @@ function resetWeights() {
 // ----------------------------------------------------
 
 // Find the best axis-aligned split (decision stump) on a weighted subset
-function trainStump(data, weights) {
+function trainStump(data, weights, isRandomForest) {
     let bestStump = null;
     let minError = Infinity;
     const n = data.length;
 
     // Loop through features (0: x, 1: y)
-    for (let feature = 0; feature < 2; feature++) {
+    let featuresToTest = [0, 1];
+    if (isRandomForest) {
+        // Random Forest feature bagging: randomly choose only 1 feature to split at this node
+        featuresToTest = [Math.floor(Math.random() * 2)];
+    }
+
+    for (let feature of featuresToTest) {
         // Evaluate splits at threshold values of each coordinate
         for (let i = 0; i < n; i++) {
             const threshold = feature === 0 ? data[i].x : data[i].y;
@@ -202,7 +208,7 @@ function predictTreeNode(node, x, y) {
 }
 
 // Recursive Decision Tree training
-function trainTree(data, weights, indices, depth, maxDepth) {
+function trainTree(data, weights, indices, depth, maxDepth, isRandomForest) {
     const nSub = indices.length;
     if (nSub === 0) return { isLeaf: true, label: 1 };
     
@@ -229,7 +235,7 @@ function trainTree(data, weights, indices, depth, maxDepth) {
     const sumW = subsetWeights.reduce((a, b) => a + b, 0);
     const normalizedSubsetWeights = sumW > 0 ? subsetWeights.map(w => w / sumW) : subsetWeights.map(() => 1 / nSub);
     
-    const stump = trainStump(subsetData, normalizedSubsetWeights);
+    const stump = trainStump(subsetData, normalizedSubsetWeights, isRandomForest);
     if (!stump || stump.error >= 0.5) {
         return { isLeaf: true, label: majorityLabel };
     }
@@ -257,9 +263,191 @@ function trainTree(data, weights, indices, depth, maxDepth) {
         feature: stump.feature,
         threshold: stump.threshold,
         polarity: stump.polarity,
-        left: trainTree(data, weights, leftIndices, depth + 1, maxDepth),
-        right: trainTree(data, weights, rightIndices, depth + 1, maxDepth)
+        left: trainTree(data, weights, leftIndices, depth + 1, maxDepth, isRandomForest),
+        right: trainTree(data, weights, rightIndices, depth + 1, maxDepth, isRandomForest)
     };
+}
+
+// ----------------------------------------------------
+// REGRESSION TREE IMPLEMENTATION (FOR GBDT)
+// ----------------------------------------------------
+
+// Find the best split for a regression stump (minimizing Sum of Squared Errors)
+function trainRegressionStump(data, residuals, indices) {
+    let bestStump = null;
+    let minSSE = Infinity;
+    const n = indices.length;
+    
+    for (let feature = 0; feature < 2; feature++) {
+        for (let i = 0; i < n; i++) {
+            const threshold = feature === 0 ? data[indices[i]].x : data[indices[i]].y;
+            
+            for (let polarity of [1, -1]) {
+                const leftIndices = [];
+                const rightIndices = [];
+                for (let j = 0; j < n; j++) {
+                    const idx = indices[j];
+                    const val = feature === 0 ? data[idx].x : data[idx].y;
+                    const direction = (val >= threshold) ? polarity : -polarity;
+                    if (direction === 1) {
+                        leftIndices.push(idx);
+                    } else {
+                        rightIndices.push(idx);
+                    }
+                }
+                
+                if (leftIndices.length === 0 || rightIndices.length === 0) continue;
+                
+                // Calculate means
+                let sumLeft = 0;
+                leftIndices.forEach(idx => sumLeft += residuals[idx]);
+                const meanLeft = sumLeft / leftIndices.length;
+                
+                let sumRight = 0;
+                rightIndices.forEach(idx => sumRight += residuals[idx]);
+                const meanRight = sumRight / rightIndices.length;
+                
+                // Calculate Sum of Squared Errors (SSE)
+                let sse = 0;
+                leftIndices.forEach(idx => sse += Math.pow(residuals[idx] - meanLeft, 2));
+                rightIndices.forEach(idx => sse += Math.pow(residuals[idx] - meanRight, 2));
+                
+                if (sse < minSSE) {
+                    minSSE = sse;
+                    bestStump = {
+                        feature,
+                        threshold,
+                        polarity,
+                        meanLeft,
+                        meanRight,
+                        leftIndices,
+                        rightIndices
+                    };
+                }
+            }
+        }
+    }
+    return bestStump;
+}
+
+// Train a recursive Regression Tree (GBDT)
+function trainRegressionTree(data, residuals, indices, depth, maxDepth) {
+    const n = indices.length;
+    if (n === 0) return { isLeaf: true, value: 0 };
+    
+    let sumR = 0;
+    indices.forEach(idx => sumR += residuals[idx]);
+    const meanVal = sumR / n;
+    
+    if (depth >= maxDepth) {
+        return { isLeaf: true, value: meanVal };
+    }
+    
+    const stump = trainRegressionStump(data, residuals, indices);
+    if (!stump) {
+        return { isLeaf: true, value: meanVal };
+    }
+    
+    return {
+        isLeaf: false,
+        feature: stump.feature,
+        threshold: stump.threshold,
+        polarity: stump.polarity,
+        left: trainRegressionTree(data, residuals, stump.leftIndices, depth + 1, maxDepth),
+        right: trainRegressionTree(data, residuals, stump.rightIndices, depth + 1, maxDepth)
+    };
+}
+
+function predictRegressionTreeNode(node, x, y) {
+    if (node.isLeaf) return node.value;
+    const val = node.feature === 0 ? x : y;
+    const direction = (val >= node.threshold) ? node.polarity : -node.polarity;
+    return predictRegressionTreeNode(direction === 1 ? node.left : node.right, x, y);
+}
+
+// ----------------------------------------------------
+// VOTING & STACKING BASE CLASSIFIERS
+// ----------------------------------------------------
+
+// Model 2: Simple Linear Perceptron
+function trainPerceptron(data) {
+    let wx = 0.5, wy = -0.5, b = 0;
+    const epochs = 100;
+    
+    for (let epoch = 0; epoch < epochs; epoch++) {
+        let misclassified = 0;
+        for (let i = 0; i < data.length; i++) {
+            const p = data[i];
+            const score = wx * p.x + wy * p.y + b;
+            const pred = score >= 0 ? 1 : -1;
+            if (pred !== p.label) {
+                wx += 0.1 * p.label * p.x;
+                wy += 0.1 * p.label * p.y;
+                b += 0.1 * p.label;
+                misclassified++;
+            }
+        }
+        if (misclassified === 0) break;
+    }
+    return { wx, wy, b };
+}
+
+// Model 3: Circle Classifier (inside/outside circle)
+function trainCircleClassifier(data) {
+    let sumX = 0, sumY = 0;
+    data.forEach(p => { sumX += p.x; sumY += p.y; });
+    const cx = sumX / data.length;
+    const cy = sumY / data.length;
+    
+    let bestRadius = 0.2;
+    let bestPolarity = 1;
+    let minError = Infinity;
+    
+    for (let r = 0.05; r <= 0.6; r += 0.03) {
+        for (let polarity of [1, -1]) {
+            let error = 0;
+            data.forEach(p => {
+                const dist2 = Math.pow(p.x - cx, 2) + Math.pow(p.y - cy, 2);
+                const pred = (dist2 <= r * r) ? polarity : -polarity;
+                if (pred !== p.label) {
+                    error++;
+                }
+            });
+            if (error < minError) {
+                minError = error;
+                bestRadius = r;
+                bestPolarity = polarity;
+            }
+        }
+    }
+    return { cx, cy, radius: bestRadius, polarity: bestPolarity };
+}
+
+// Stacking Meta-Classifier (Stump on 3 base predictions)
+function trainMetaStump(basePreds, labels) {
+    let bestMeta = null;
+    let minError = Infinity;
+    const n = basePreds.length;
+    
+    // feature: 0 (Stump), 1 (Perceptron), 2 (Circle)
+    for (let feature = 0; feature < 3; feature++) {
+        const threshold = 0; // threshold is 0 since values are -1 or +1
+        for (let polarity of [1, -1]) {
+            let error = 0;
+            for (let i = 0; i < n; i++) {
+                const val = basePreds[i][feature];
+                const pred = (val >= threshold) ? polarity : -polarity;
+                if (pred !== labels[i]) {
+                    error++;
+                }
+            }
+            if (error < minError) {
+                minError = error;
+                bestMeta = { feature, threshold, polarity, error };
+            }
+        }
+    }
+    return bestMeta;
 }
 
 // ----------------------------------------------------
@@ -280,10 +468,11 @@ function retrain() {
     
     ensemble = [];
     
-    if (method === 'bagging') {
+    if (method === 'bagging' || method === 'randomforest') {
         const sampleRate = parseInt(sampleRateSlider.value) / 100;
         const n = points.length;
         const sampleSize = Math.max(1, Math.round(n * sampleRate));
+        const isRF = method === 'randomforest';
         
         for (let t = 0; t < numEstimators; t++) {
             // Bootstrap Sampling (random with replacement)
@@ -294,15 +483,15 @@ function retrain() {
             
             // Train tree using bootstrap subset
             const uniformWeights = Array(n).fill(1);
-            const root = trainTree(points, uniformWeights, bootstrapIndices, 0, maxDepth);
+            const root = trainTree(points, uniformWeights, bootstrapIndices, 0, maxDepth, isRF);
             
             ensemble.push({
                 root,
-                alpha: 1 / numEstimators, // Equal voting weights in Bagging
+                alpha: 1 / numEstimators, // Equal voting weights
                 bootstrapSize: sampleSize
             });
         }
-        trainStatus.innerText = "已訓練 (Bagging)";
+        trainStatus.innerText = isRF ? "已訓練 (Random Forest)" : "已訓練 (Bagging)";
         trainStatus.className = "badge";
     } 
     else if (method === 'boosting') {
@@ -313,8 +502,7 @@ function retrain() {
         const allIndices = Array.from({ length: n }, (_, i) => i);
         
         for (let t = 0; t < numEstimators; t++) {
-            // Train stump/tree on current weights
-            const root = trainTree(points, sampleWeights, allIndices, 0, maxDepth);
+            const root = trainTree(points, sampleWeights, allIndices, 0, maxDepth, false);
             
             // Calculate weighted error
             let error = 0;
@@ -325,20 +513,17 @@ function retrain() {
                 }
             }
             
-            // Avoid division by zero or negative weights
             if (error >= 0.5) {
-                // If stump is worse than random, break training
                 if (t === 0) {
-                    ensemble.push({ root, alpha: 1.0 });
+                    ensemble.push({ root, alpha: 1.0, error: 0.5 });
                 }
                 break;
             }
             if (error < 1e-6) error = 1e-6; // Clamp
             
-            // Calculate alpha (voting power)
             let alpha = 0.5 * Math.log((1 - error) / error) * learningRate;
             
-            // Update sample weights
+            // Update weights
             for (let i = 0; i < n; i++) {
                 const pred = predictTreeNode(root, points[i].x, points[i].y);
                 const exponent = -alpha * points[i].label * pred;
@@ -359,6 +544,82 @@ function retrain() {
         }
         trainStatus.innerText = "已訓練 (AdaBoost)";
         trainStatus.className = "badge badge-accent";
+    }
+    else if (method === 'gbdt') {
+        const n = points.length;
+        const learningRate = parseFloat(learningRateSlider.value);
+        const allIndices = Array.from({ length: n }, (_, i) => i);
+        
+        // F holds log-odds predictions
+        let F = Array(n).fill(0);
+        
+        for (let t = 0; t < numEstimators; t++) {
+            // Calculate pseudo-residuals (probability residuals)
+            const residuals = [];
+            for (let i = 0; i < n; i++) {
+                const prob = 1 / (1 + Math.exp(-F[i]));
+                const label01 = (points[i].label + 1) / 2;
+                residuals.push(label01 - prob);
+            }
+            
+            const root = trainRegressionTree(points, residuals, allIndices, 0, maxDepth);
+            
+            // Update F
+            for (let i = 0; i < n; i++) {
+                const pred = predictRegressionTreeNode(root, points[i].x, points[i].y);
+                F[i] += learningRate * pred;
+            }
+            
+            // Average absolute residual as error metric
+            const meanAbsRes = residuals.reduce((sum, val) => sum + Math.abs(val), 0) / n;
+            
+            ensemble.push({
+                root,
+                alpha: learningRate,
+                isRegression: true,
+                error: meanAbsRes
+            });
+        }
+        trainStatus.innerText = "已訓練 (GBDT)";
+        trainStatus.className = "badge badge-accent";
+    }
+    else if (method === 'voting' || method === 'stacking') {
+        // Enforce 3 models
+        const n = points.length;
+        const uniformWeights = Array(n).fill(1);
+        const allIndices = Array.from({ length: n }, (_, i) => i);
+        
+        // Model 1: Stump (maxDepth 1 decision tree)
+        const stump = trainTree(points, uniformWeights, allIndices, 0, 1, false);
+        // Model 2: Linear Perceptron
+        const perceptron = trainPerceptron(points);
+        // Model 3: Circle Classifier
+        const circle = trainCircleClassifier(points);
+        
+        ensemble.push({ type: 'stump', root: stump, alpha: 1 });
+        ensemble.push({ type: 'perceptron', weights: perceptron, alpha: 1 });
+        ensemble.push({ type: 'circle', circle: circle, alpha: 1 });
+        
+        if (method === 'stacking') {
+            // Generate meta-dataset
+            const basePreds = [];
+            for (let i = 0; i < n; i++) {
+                const p1 = predictTreeNode(stump, points[i].x, points[i].y);
+                const scorePerc = perceptron.wx * points[i].x + perceptron.wy * points[i].y + perceptron.b;
+                const p2 = scorePerc >= 0 ? 1 : -1;
+                const dist2 = Math.pow(points[i].x - circle.cx, 2) + Math.pow(points[i].y - circle.cy, 2);
+                const p3 = (dist2 <= circle.radius * circle.radius) ? circle.polarity : -circle.polarity;
+                
+                basePreds.push([p1, p2, p3]);
+            }
+            
+            const meta = trainMetaStump(basePreds, points.map(p => p.label));
+            ensemble.push({ type: 'meta', meta: meta, alpha: 1 });
+            trainStatus.innerText = "已訓練 (Stacking)";
+        } else {
+            trainStatus.innerText = "已訓練 (Voting)";
+        }
+        trainStatus.className = "badge";
     }
     
     updateEstimatorCards();
@@ -410,16 +671,53 @@ function toggleAutoTrain() {
 function predictEnsemble(x, y) {
     if (ensemble.length === 0) return 0;
     
-    let sum = 0;
-    let sumAlpha = 0;
+    const method = methodSelect.value;
     
+    if (method === 'voting') {
+        // Simple majority vote sum of the 3 base models
+        const p1 = predictTreeNode(ensemble[0].root, x, y);
+        
+        const perc = ensemble[1].weights;
+        const p2 = (perc.wx * x + perc.wy * y + perc.b >= 0) ? 1 : -1;
+        
+        const circ = ensemble[2].circle;
+        const dist2 = Math.pow(x - circ.cx, 2) + Math.pow(y - circ.cy, 2);
+        const p3 = (dist2 <= circ.radius * circ.radius) ? circ.polarity : -circ.polarity;
+        
+        return p1 + p2 + p3;
+    }
+    
+    if (method === 'stacking') {
+        const p1 = predictTreeNode(ensemble[0].root, x, y);
+        
+        const perc = ensemble[1].weights;
+        const p2 = (perc.wx * x + perc.wy * y + perc.b >= 0) ? 1 : -1;
+        
+        const circ = ensemble[2].circle;
+        const dist2 = Math.pow(x - circ.cx, 2) + Math.pow(y - circ.cy, 2);
+        const p3 = (dist2 <= circ.radius * circ.radius) ? circ.polarity : -circ.polarity;
+        
+        const meta = ensemble[3].meta;
+        const baseVals = [p1, p2, p3];
+        const val = baseVals[meta.feature];
+        return (val >= meta.threshold) ? meta.polarity : -meta.polarity;
+    }
+    
+    if (method === 'gbdt') {
+        let sum = 0;
+        ensemble.forEach(est => {
+            sum += est.alpha * predictRegressionTreeNode(est.root, x, y);
+        });
+        return sum; // Returns raw log-odds score
+    }
+    
+    // Default (Bagging, Random Forest, AdaBoost)
+    let sum = 0;
     ensemble.forEach(est => {
         const pred = predictTreeNode(est.root, x, y);
         sum += est.alpha * pred;
-        sumAlpha += est.alpha;
     });
-    
-    return sum; // Returns raw weighted sum score
+    return sum;
 }
 
 // Render decision stumps splits recursively (helper to draw weak boundaries)
@@ -465,6 +763,7 @@ function draw() {
     
     const gridRows = Math.ceil(h / gridSize);
     const gridCols = Math.ceil(w / gridSize);
+    const method = methodSelect.value;
     
     // Matrix to store scores for border extraction
     const scores = Array(gridRows).fill(0).map(() => Array(gridCols).fill(0));
@@ -515,9 +814,49 @@ function draw() {
         ctx.restore();
         
         // 3. Draw weak split lines for each estimator
-        ensemble.forEach(est => {
-            drawSplitLines(est.root, 0, 1, 0, 1);
-        });
+        if (method === 'voting' || method === 'stacking') {
+            if (ensemble.length >= 3) {
+                // Draw Stump split
+                drawSplitLines(ensemble[0].root, 0, 1, 0, 1);
+                
+                // Draw Perceptron linear divider
+                ctx.save();
+                ctx.lineWidth = 1;
+                ctx.setLineDash([4, 4]);
+                ctx.strokeStyle = 'rgba(140, 107, 18, 0.4)';
+                const perc = ensemble[1].weights;
+                ctx.beginPath();
+                if (Math.abs(perc.wy) > 1e-4) {
+                    const y0 = -(perc.wx * 0 + perc.b) / perc.wy;
+                    const y1 = -(perc.wx * 1 + perc.b) / perc.wy;
+                    ctx.moveTo(0, y0 * canvas.height);
+                    ctx.lineTo(canvas.width, y1 * canvas.height);
+                } else {
+                    const x0 = -perc.b / perc.wx;
+                    ctx.moveTo(x0 * canvas.width, 0);
+                    ctx.lineTo(x0 * canvas.width, canvas.height);
+                }
+                ctx.stroke();
+                ctx.restore();
+                
+                // Draw Circle boundary
+                ctx.save();
+                ctx.lineWidth = 1;
+                ctx.setLineDash([4, 4]);
+                ctx.strokeStyle = 'rgba(140, 107, 18, 0.4)';
+                const circ = ensemble[2].circle;
+                ctx.beginPath();
+                ctx.arc(circ.cx * canvas.width, circ.cy * canvas.height, circ.radius * canvas.width, 0, 2 * Math.PI);
+                ctx.stroke();
+                ctx.restore();
+            }
+        } else {
+            ensemble.forEach(est => {
+                if (est.root) {
+                    drawSplitLines(est.root, 0, 1, 0, 1);
+                }
+            });
+        }
     }
     
     // 4. Draw Data Points (Ink drops)
@@ -525,13 +864,10 @@ function draw() {
         const cx = p.x * w;
         const cy = p.y * h;
         
-        // Dynamic radius depending on sample weight (for AdaBoost)
         let radius = 6;
         if (methodSelect.value === 'boosting' && sampleWeights.length === points.length) {
             const normalWeight = 1 / points.length;
-            // Radius scales proportional to root of weight ratio
             radius = 6 * Math.sqrt(sampleWeights[idx] / normalWeight);
-            // Cap visual bounds
             radius = Math.max(3, Math.min(22, radius));
         }
         
@@ -546,7 +882,7 @@ function draw() {
             ctx.fill();
             ctx.stroke();
             
-            // Draw a tiny ink inner shine
+            // Inner shine
             ctx.beginPath();
             ctx.arc(cx - radius * 0.3, cy - radius * 0.3, radius * 0.2, 0, 2 * Math.PI);
             ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
@@ -558,7 +894,7 @@ function draw() {
             ctx.fill();
             ctx.stroke();
             
-            // Draw a tiny ink inner shine
+            // Inner shine
             ctx.beginPath();
             ctx.arc(cx - radius * 0.3, cy - radius * 0.3, radius * 0.2, 0, 2 * Math.PI);
             ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
@@ -567,7 +903,6 @@ function draw() {
         ctx.restore();
     });
     
-    // Update data counter
     dataCounter.innerText = `${points.length} 筆印記`;
 }
 
@@ -583,14 +918,48 @@ function updateEstimatorCards() {
         return;
     }
     
+    const method = methodSelect.value;
+    
+    if (method === 'voting' || method === 'stacking') {
+        const names = ['基底模型 #1: Stump', '基底模型 #2: Linear', '基底模型 #3: Circle'];
+        const desc = ['軸向決策單元', '對角感知機分類', '範圍內外圓形分類'];
+        for (let i = 0; i < 3; i++) {
+            const card = document.createElement('div');
+            card.className = 'estimator-card';
+            card.innerHTML = `
+                <div class="estimator-title">${names[i]}</div>
+                <span style="color: var(--text-secondary); margin-bottom: 2px;">${desc[i]}</span>
+                <span class="estimator-metric">權重: <strong>1.00</strong></span>
+            `;
+            estimatorList.appendChild(card);
+        }
+        if (method === 'stacking' && ensemble.length > 3) {
+            const card = document.createElement('div');
+            card.className = 'estimator-card';
+            card.style.borderColor = 'var(--vermilion)';
+            const meta = ensemble[3].meta;
+            const featName = ['Stump', 'Linear', 'Circle'][meta.feature];
+            card.innerHTML = `
+                <div class="estimator-title" style="color: var(--vermilion);">元分類器 (Meta-Stump)</div>
+                <span style="color: var(--text-secondary); margin-bottom: 2px;">Meta on predictions</span>
+                <span class="estimator-metric">分裂決策: <strong>${featName}</strong></span>
+            `;
+            estimatorList.appendChild(card);
+        }
+        return;
+    }
+    
     ensemble.forEach((est, idx) => {
         const card = document.createElement('div');
         card.className = 'estimator-card';
         
-        const method = methodSelect.value;
         let metricHTML = '';
-        if (method === 'bagging') {
+        if (method === 'bagging' || method === 'randomforest') {
             metricHTML = `<span class="estimator-metric">樣本: <strong>${est.bootstrapSize}</strong> 點</span>`;
+        } else if (method === 'gbdt') {
+            metricHTML = `
+                <span class="estimator-metric">平均殘差: <strong>${est.error.toFixed(3)}</strong></span>
+                <span class="estimator-metric">學習率: <strong>${est.alpha.toFixed(2)}</strong></span>`;
         } else {
             const errorPercent = (est.error * 100).toFixed(1) + '%';
             metricHTML = `
@@ -598,7 +967,6 @@ function updateEstimatorCards() {
                 <span class="estimator-metric">權重 &alpha;: <strong>${est.alpha.toFixed(2)}</strong></span>`;
         }
         
-        // Find root node feature to display
         let featureText = '葉節點 (Leaf)';
         if (!est.root.isLeaf) {
             featureText = est.root.feature === 0 ? '垂直切割 (X)' : '水平切割 (Y)';
