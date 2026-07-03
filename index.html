@@ -144,6 +144,45 @@
                     </div>
                 </div>
 
+                <!-- Left Column: Hyperparameter Guide Card -->
+                <div class="panel glass-card card-glow-gold" style="margin-top: 20px;">
+                    <div class="panel-header">
+                        <h2><i class="fa-solid fa-gears text-gold"></i> 💡 超參數與優化指南</h2>
+                    </div>
+                    <div class="hyper-guide-content" style="font-size: 12.5px; line-height: 1.6; color: var(--text-secondary);">
+                        <p style="margin-top: 0;">本沙盒提供以下可調的<strong>超參數 (Hyperparameters)</strong>，它們決定了模型的複雜度與泛化能力：</p>
+                        
+                        <div class="hyper-item" style="margin-bottom: 12px; border-bottom: 1px dashed var(--gold-border); padding-bottom: 8px;">
+                            <strong style="color: var(--text-primary);"><i class="fa-solid fa-tree text-gold"></i> 樹的最大深度 (Tree Depth):</strong>
+                            <div style="margin-top: 4px;">控制單個決策樹的複雜度。深度 1 (Stump) 偏向高偏差 (Bias)；增加深度可降低偏差，但過高會導致過擬合 (Overfitting)。</div>
+                        </div>
+                        
+                        <div class="hyper-item" style="margin-bottom: 12px; border-bottom: 1px dashed var(--gold-border); padding-bottom: 8px;">
+                            <strong style="color: var(--text-primary);"><i class="fa-solid fa-calculator text-gold"></i> 學習器數量 (Estimators):</strong>
+                            <div style="margin-top: 4px;">整合的弱學習器個數。過少會欠擬合；對 AdaBoost/GBDT 而言，過多可能造成過擬合，需搭配學習率調整。</div>
+                        </div>
+                        
+                        <div class="hyper-item" style="margin-bottom: 12px; border-bottom: 1px dashed var(--gold-border); padding-bottom: 8px;">
+                            <strong style="color: var(--text-primary);"><i class="fa-solid fa-percentage text-gold"></i> 樣本抽樣比例 (Sample Rate):</strong>
+                            <div style="margin-top: 4px;">控制 Bagging/RF 的隨機多樣性。較低的比例可增加基學習器間的差異，有助於降低變異數 (Variance)。</div>
+                        </div>
+                        
+                        <div class="hyper-item" style="margin-bottom: 12px; border-bottom: 1px dashed var(--gold-border); padding-bottom: 8px;">
+                            <strong style="color: var(--text-primary);"><i class="fa-solid fa-bolt text-gold"></i> 學習率 (Learning Rate):</strong>
+                            <div style="margin-top: 4px;">控制 Boosting/GBDT 每次疊代的步長。小步長搭配較多的學習器，通常能獲得更佳的泛化效能。</div>
+                        </div>
+                        
+                        <div class="hyper-automl" style="background: var(--gold-glow); padding: 10px; border-radius: 6px; border: 1px solid var(--gold-border); margin-top: 10px;">
+                            <strong style="color: var(--text-primary); display: block; margin-bottom: 4px;"><i class="fa-solid fa-wand-magic-sparkles text-gold"></i> AutoML 自動化調參策略：</strong>
+                            <ul style="margin: 0; padding-left: 18px; font-size: 11.5px; color: var(--text-secondary);">
+                                <li><strong>網格搜尋 (Grid Search):</strong> 暴力窮舉所有超參數組合。</li>
+                                <li><strong>隨機搜尋 (Random Search):</strong> 隨機抽樣參數空間，速度較快。</li>
+                                <li><strong>貝氏優化 (Bayesian Opt):</strong> 用高斯過程預測最優參數，收斂最快。</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Right Column: Canvas & Estimator Breakdown -->
                 <div class="panel-group">
                     <!-- Canvas Visualizer -->
