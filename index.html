@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ensemble Model 集成學習演兵場 | Interactive Playground</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Style Sheet -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="ink-wash-vignette"></div>
+    
+    <div class="app-container">
+        <!-- Header -->
+        <header>
+            <div class="logo">
+                <i class="fa-solid fa-layer-group logo-icon"></i>
+                <h1>Ensemble Model 集成學習演兵場</h1>
+            </div>
+            <p class="subtitle">自助聚合 (Bagging) 與自適應提升 (AdaBoost) 的水墨風動態視覺化</p>
+            
+            <!-- Navigation Tabs -->
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('playground')">
+                    <i class="fa-solid fa-compass"></i> ⚔️ 演兵沙盤 (Playground)
+                </button>
+                <button class="tab-btn" onclick="switchTab('tutorial')">
+                    <i class="fa-solid fa-scroll"></i> 📖 整合講堂 (Tutorial)
+                </button>
+                <button class="tab-btn" onclick="switchTab('notes')">
+                    <i class="fa-solid fa-book-open"></i> 📂 山海筆記 (Notes)
+                </button>
+            </div>
+        </header>
+
+        <!-- Tab 1: Interactive Playground -->
+        <section id="playground-tab" class="tab-content active">
+            <div class="grid-layout">
+                <!-- Left Column: Controls Panel -->
+                <div class="panel glass-card">
+                    <div class="panel-header">
+                        <h2><i class="fa-solid fa-sliders text-gold"></i> 演格參數控制 (Controls)</h2>
+                    </div>
+                    <p class="panel-desc">點擊畫布可任意擺放數據點，在此調整集成學習的參數進行即時訓練。</p>
+                    
+                    <!-- Class Selection -->
+                    <div class="form-group">
+                        <label>選用印記 (Data Class)</label>
+                        <div class="class-selector">
+                            <button id="class-red-btn" class="class-btn active" onclick="setClass(1)">
+                                <span class="dot-preview red-dot"></span> 硃砂印 (Class A)
+                            </button>
+                            <button id="class-black-btn" class="class-btn" onclick="setClass(-1)">
+                                <span class="dot-preview black-dot"></span> 深墨滴 (Class B)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Ensemble Method Selection -->
+                    <div class="form-group">
+                        <label for="ensemble-method">集成演算法 (Method)</label>
+                        <select id="ensemble-method" onchange="onMethodChange()">
+                            <option value="bagging">自助聚合 (Bagging - Random Forest style)</option>
+                            <option value="boosting">自適應提升 (AdaBoost - Sequential)</option>
+                        </select>
+                    </div>
+
+                    <!-- Common Parameter: Estimator Count -->
+                    <div class="form-group">
+                        <label for="estimator-count">弱學習器數量 (Estimators): <span id="val-estimators">5</span></label>
+                        <input type="range" id="estimator-count" min="1" max="15" value="5" step="1" oninput="onParamChange()">
+                    </div>
+
+                    <!-- Common Parameter: Tree Depth (Decision Stump vs Complex Tree) -->
+                    <div class="form-group">
+                        <label for="tree-depth">弱學習器深度 (Max Depth): <span id="val-depth">1 (Decision Stump)</span></label>
+                        <input type="range" id="tree-depth" min="1" max="3" value="1" step="1" oninput="onParamChange()">
+                        <span class="input-hint">深度為 1 時為決策樹枝 (Stump)，即單一橫線或直線分割。</span>
+                    </div>
+
+                    <!-- Bagging-specific: Sample Rate -->
+                    <div class="form-group" id="group-sample-rate">
+                        <label for="sample-rate">自助抽樣比例 (Sample Rate): <span id="val-sample-rate">80%</span></label>
+                        <input type="range" id="sample-rate" min="50" max="100" value="80" step="5" oninput="onParamChange()">
+                    </div>
+
+                    <!-- Boosting-specific: Learning Rate -->
+                    <div class="form-group" id="group-learning-rate" style="display: none;">
+                        <label for="learning-rate">學習率 (Learning Rate &eta;): <span id="val-learning-rate">0.5</span></label>
+                        <input type="range" id="learning-rate" min="0.1" max="1.0" value="0.5" step="0.1" oninput="onParamChange()">
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="panel-actions">
+                        <button class="btn btn-primary" onclick="triggerStep()">
+                            <i class="fa-solid fa-forward-step"></i> 單步更新 (Step)
+                        </button>
+                        <button class="btn btn-secondary" onclick="toggleAutoTrain()">
+                            <i class="fa-solid fa-play" id="btn-play-icon"></i> <span id="btn-play-text">自動演示</span>
+                        </button>
+                        <button class="btn btn-outline" onclick="generateRandomData()">
+                            <i class="fa-solid fa-dice"></i> 隨機點
+                        </button>
+                        <button class="btn btn-danger" onclick="clearData()">
+                            <i class="fa-solid fa-trash-can"></i> 清除畫布
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Right Column: Canvas & Estimator Breakdown -->
+                <div class="panel-group">
+                    <!-- Canvas Visualizer -->
+                    <div class="panel glass-card card-glow-gold">
+                        <div class="panel-header">
+                            <h2><i class="fa-solid fa-paint-brush text-gold"></i> 雙維度決策邊界 (Decision Sandbox)</h2>
+                            <span class="badge" id="data-counter">0 筆印記</span>
+                        </div>
+                        
+                        <div class="canvas-wrapper">
+                            <canvas id="sandbox-canvas" width="500" height="500"></canvas>
+                            <div class="canvas-instructions" id="canvas-hint">
+                                <i class="fa-solid fa-computer-mouse"></i> 點擊此處擺放數據點（左鍵新增，右鍵可刪除）
+                            </div>
+                        </div>
+
+                        <!-- Legend -->
+                        <div class="canvas-legend">
+                            <span class="legend-item"><span class="legend-color red"></span> 硃砂區域 (A)</span>
+                            <span class="legend-item"><span class="legend-color black"></span> 墨染區域 (B)</span>
+                            <span class="legend-item"><span class="legend-border"></span> 集成邊界</span>
+                        </div>
+                    </div>
+
+                    <!-- Ensemble Breakdown -->
+                    <div class="panel glass-card">
+                        <div class="panel-header">
+                            <h2><i class="fa-solid fa-network-wired text-gold"></i> 集成模型拆解 (Base Estimators)</h2>
+                            <span class="badge badge-accent" id="train-status">未訓練</span>
+                        </div>
+                        <div class="estimator-grid" id="estimator-list">
+                            <!-- Injected by JS -->
+                            <div class="empty-state">
+                                <i class="fa-solid fa-folder-open"></i>
+                                <p>請點擊「單步更新」或新增數據點以觀察弱學習器的組成。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tab 2: Tutorial -->
+        <section id="tutorial-tab" class="tab-content">
+            <div class="panel glass-card math-theory-panel">
+                <h2><i class="fa-solid fa-book text-gold"></i> 整合學習理論大講堂</h2>
+                
+                <div class="math-intro-grid">
+                    <div class="theory-card">
+                        <h3><i class="fa-solid fa-cube text-gold"></i> 1. 自助聚合法 (Bagging)</h3>
+                        <p>Bagging 藉由<strong>降低模型的變異 (Variance)</strong> 來提升效能，隨機森林 (Random Forest) 就是最經典的 Bagging 實作。</p>
+                        <div class="theory-box">
+                            <strong>運作核心：</strong>
+                            <ul>
+                                <li><strong>Bootstrap：</strong> 從原始訓練集中進行「有放回抽樣」產生 $T$ 個子資料集。</li>
+                                <li><strong>Parallel Training：</strong> 獨立且平行地在每個子資料集上訓練一個基底模型。</li>
+                                <li><strong>Aggregating：</strong> 將所有模型預測結果進行投票或求取平均。</li>
+                            </ul>
+                        </div>
+                        <p class="theory-note">在本沙盤中，您會看到多個虛線的弱分割，它們都是在不同隨機子樣本下產生的單一決策樹枝。當我們把這些多樣化的決策合併時，最終的邊界會變得更平滑，抗噪能力也大增。</p>
+                    </div>
+
+                    <div class="theory-card">
+                        <h3><i class="fa-solid fa-arrows-spin text-gold"></i> 2. 自適應提升法 (AdaBoost)</h3>
+                        <p>Boosting 是一系列將<strong>弱學習器 (Weak Learners)</strong> 提升為強學習器的序列式方法，著重於<strong>降低偏差 (Bias)</strong>。</p>
+                        <div class="theory-box">
+                            <strong>自適應樣本權重更新公式：</strong>
+                            <p>對每個樣本 $i$，其權重 $w_i$ 更新為：</p>
+                            <div class="math-formula">
+                                $$w_i \leftarrow w_i \cdot e^{-\alpha_t y_i h_t(x_i)}$$
+                            </div>
+                            <p>其中 $y_i$ 為真實類別（$\pm 1$），$h_t(x_i)$ 為第 $t$ 個弱分類器的預測值，$\alpha_t$ 是該分類器的投票權重：</p>
+                            <div class="math-formula">
+                                $$\alpha_t = \frac{1}{2} \ln \left( \frac{1 - \epsilon_t}{\epsilon_t} \right)$$
+                            </div>
+                        </div>
+                        <p class="theory-note">在本沙盤的 AdaBoost 模式下，每次單步更新時，上一輪**預測錯誤**的點會在畫布上**變大（權重上升）**，迫使下一個基底模型專門針對這些「難題」進行分割。最後的決策是由所有學習器乘上其投票權重 $\alpha_t$ 疊加而成。</p>
+                    </div>
+
+                    <div class="theory-card">
+                        <h3><i class="fa-solid fa-code-fork text-gold"></i> 3. 投票與堆疊 (Voting & Stacking)</h3>
+                        <div class="theory-box">
+                            <strong>Voting (投票法)：</strong>
+                            <p>結合了**不同種類**的模型（例如支持向量機、邏輯回歸、決策樹），直接取多數決（硬投票）或預測機率之加權平均（軟投票）。</p>
+                            <hr style="border: 0; border-top: 1px solid var(--gold-border); margin: 10px 0;">
+                            <strong>Stacking (堆疊法)：</strong>
+                            <p>不使用簡單的加權投票，而是把數個基底模型（Level-0）的預測結果，作為特徵輸入給一個新的元學習器（Level-1 Meta-Classifier / Blender），由它學習如何最優地融合這些結果。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tab 3: Study Notes -->
+        <section id="notes-tab" class="tab-content">
+            <div class="grid-layout notebook-layout">
+                <!-- Left Column: README -->
+                <div class="panel glass-card scroll-panel">
+                    <div class="panel-header">
+                        <h2><i class="fa-solid fa-scroll text-gold"></i> 專案導覽手冊 (README.md)</h2>
+                    </div>
+                    <div class="markdown-body" id="readme-container">
+                        <!-- Injected by JS -->
+                    </div>
+                </div>
+
+                <!-- Right Column: Ens-his -->
+                <div class="panel glass-card scroll-panel">
+                    <div class="panel-header">
+                        <h2><i class="fa-solid fa-history text-gold"></i> 對話與操作歷程 (Ens-his.md)</h2>
+                    </div>
+                    <div class="markdown-body" id="history-container">
+                        <!-- Injected by JS -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer>
+            <p>&copy; 2026 gogogo137-cmyk. Classical Ink-wash Web Portfolio &copy; All Rights Reserved.</p>
+        </footer>
+    </div>
+
+    <!-- JS Logic -->
+    <script src="app.js"></script>
+</body>
+</html>
