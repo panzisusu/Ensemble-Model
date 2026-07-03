@@ -64,3 +64,16 @@
   3. 為 Voting/Stacking 設計並訓練了三種不同數學特性的基底分類器：決策單元 (Stump)、線性感知機 (Perceptron)、圓形分類器 (Circle Classifier)，並在畫布上可視化繪製其虛線邊界，最終透過硬投票或 Meta-Stump 進行結合預測。
   4. 同步更新 `README.md` 的待辦事項，並將程式碼和紀錄推送到遠端倉庫。
 
+### 8. 網頁佈局調整與連結優化
+* **使用者：** 提出 5 項修改：
+  1. 將個人主網頁中 Ensemble Model 卡片文字設為深色以提升可讀性（解決原先白底白字的問題）。
+  2. 左上角新增回作品集連結 `https://gogogo137-cmyk.github.io/index-zh.html`。
+  3. 左上角新增 GITHUB 專案原始碼連結 `https://github.com/gogogo137-cmyk/Ensemble-Model`。
+  4. 左下角新增與 Gemini 的對話紀錄連結（讀取 `Ens-his.md`）。
+  5. 左下角新增與 ChatGPT 的對話紀錄連結（讀取 `Ensemble-chatGPT.pdf`）。
+* **執行動作：**
+  - 在主作品集專案 `index.html` 與 `index-zh.html` 中，將渲染卡片的 class 與 `project.id` 綁定，並在 `styles.css` 中設定 `.ensemble-model` 卡片字體為深墨色 (`#2b2621`) 及硃砂紅圖示 (`#9e2a2b`)。
+  - 在集成學習網頁上方新增 `top-nav-bar` 導覽列。
+  - 在左下角新增「歷史學習對話紀錄」卡片，並提供 `Ens-his.md` 與 `Ensemble-chatGPT.pdf` 的連結與對應 CSS 樣式。
+  - 將所有最新修改推送至主作品集倉庫與獨立項目倉庫。
+
