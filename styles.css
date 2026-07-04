@@ -49,6 +49,21 @@ body, html {
     z-index: 999;
 }
 
+/* Faint technical backdrop representing Ensemble learning */
+.ensemble-bg-artwork {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-width: 1400px;
+    height: 80vh;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.05; /* extremely faint and watermark-like */
+    background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="100%" height="100%"><style>.node{fill:%238c6b12;stroke:%238c6b12;stroke-width:4px;fill-opacity:0.2;}.line{stroke:%238c6b12;stroke-width:2.5px;stroke-dasharray:6,6;fill:none;}.line-active{stroke:%239e2a2b;stroke-width:3px;stroke-dasharray:6,6;fill:none;}.node-out{fill:%239e2a2b;stroke:%239e2a2b;stroke-width:5px;fill-opacity:0.2;}</style><g><path class="line" d="M 120 250 L 400 100"/><path class="line" d="M 120 250 L 400 250"/><path class="line" d="M 120 250 L 400 400"/><path class="line-active" d="M 400 100 L 680 250"/><path class="line-active" d="M 400 250 L 680 250"/><path class="line-active" d="M 400 400 L 680 250"/><circle class="node" cx="120" cy="250" r="18"/><circle class="node" cx="400" cy="100" r="24"/><circle class="node" cx="400" cy="250" r="24"/><circle class="node" cx="400" cy="400" r="24"/><circle class="node-out" cx="680" cy="250" r="30"/></g></svg>') center/contain no-repeat;
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
     width: 8px;
