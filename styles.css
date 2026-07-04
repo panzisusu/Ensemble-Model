@@ -187,6 +187,13 @@ header h1 {
     align-items: start;
 }
 
+.grid-col-left, .grid-col-right {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+}
+
 /* Panel & Card Design */
 .panel {
     background: var(--bg-card);
